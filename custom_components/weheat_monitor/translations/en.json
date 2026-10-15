@@ -1,0 +1,88 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Weheat Monitor",
+        "description": "Connect Home Assistant to your Weheat Monitor account. The key is tested right away.",
+        "data": {
+          "api_key": "API key",
+          "base_url": "Address"
+        },
+        "data_description": {
+          "api_key": "Starts with whm_. Create it at weheat-monitor.nl under Settings, Connections; it is shown only once.",
+          "base_url": "Leave as is, unless you test against another server."
+        }
+      },
+      "thermostat": {
+        "title": "Thermostat",
+        "description": "Every minute the room temperature and the setpoint go to Weheat Monitor, together with the make and model of the thermostat. The thermostat only follows the plan when the plan is live on weheat-monitor.nl and the switch Follow plan is on (off by default).",
+        "data": {
+          "climate_entity": "Thermostat",
+          "room_temp": "Room temperature sensor"
+        },
+        "data_description": {
+          "climate_entity": "A climate entity with a single target temperature.",
+          "room_temp": "Optional. Only if a separate sensor measures the room better than the thermostat does."
+        }
+      },
+      "reauth_confirm": {
+        "title": "New key",
+        "description": "The key was rejected (revoked?). Create a new one at weheat-monitor.nl and paste it here.",
+        "data": {
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Key not accepted",
+      "invalid_key_format": "A key is whm_ followed by 64 characters 0-9 and a-f",
+      "cannot_connect": "Cannot reach Weheat Monitor, try again later"
+    },
+    "abort": {
+      "already_configured": "This key is already in use",
+      "already_in_progress": "Setup for this key is already in progress",
+      "reauth_successful": "Key updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Thermostat",
+        "description": "Change the thermostat or the room sensor.",
+        "data": {
+          "climate_entity": "Thermostat",
+          "room_temp": "Room temperature sensor"
+        },
+        "data_description": {
+          "climate_entity": "A climate entity with a single target temperature.",
+          "room_temp": "Optional. Only if a separate sensor measures the room better than the thermostat does."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_sync": {
+        "name": "Last sync",
+        "state_attributes": {
+          "queue_length": {
+            "name": "Queue"
+          }
+        }
+      },
+      "active_setpoint": {
+        "name": "Active setpoint"
+      }
+    },
+    "binary_sensor": {
+      "plan_live": {
+        "name": "Plan live"
+      }
+    },
+    "switch": {
+      "follow_plan": {
+        "name": "Follow plan"
+      }
+    }
+  }
+}

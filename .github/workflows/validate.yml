@@ -1,0 +1,70 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Not in home-assistant/brands yet (needed only for the default HACS list).
+          ignore: brands
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+      - run: pytest -q
+
+  authorship:
+    # Public history: every commit by the maintainer (noreply address), no trailers. See CONTRIBUTING.md.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check authors and trailers
+        run: |
+          # Both GitHub noreply forms of the maintainer; the website still uses the one without the id.
+          ok1="kirvis13 <7209653+kirvis13@users.noreply.github.com>"
+          ok2="kirvis13 <kirvis13@users.noreply.github.com>"
+          fail=0
+          for c in $(git rev-list HEAD); do
+            author="$(git log -1 --format='%an <%ae>' "$c")"
+            committer="$(git log -1 --format='%cn <%ce>' "$c")"
+            if [ "$author" != "$ok1" ] && [ "$author" != "$ok2" ]; then echo "::error::$c author is '$author' (see CONTRIBUTING.md)"; fail=1; fi
+            if [ "$committer" != "$ok1" ] && [ "$committer" != "$ok2" ] && [ "$committer" != "GitHub <noreply@github.com>" ]; then
+              echo "::error::$c committer is '$committer'"; fail=1
+            fi
+            if git log -1 --format=%B "$c" | grep -qiE '^(co-authored-by:|[a-z-]+-session:)'; then
+              echo "::error::$c has a co-author or session trailer (see CONTRIBUTING.md)"; fail=1
+            fi
+          done
+          exit $fail
+
+  release-tag:
+    # A tag vX.Y.Z must equal the version in manifest.json.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          want="v$(python3 -c "import json;print(json.load(open('custom_components/weheat_monitor/manifest.json'))['version'])")"
+          [ "$GITHUB_REF_NAME" = "$want" ] || { echo "::error::tag $GITHUB_REF_NAME, manifest says $want"; exit 1; }

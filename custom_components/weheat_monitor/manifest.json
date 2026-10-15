@@ -1,0 +1,13 @@
+{
+  "domain": "weheat_monitor",
+  "name": "Weheat Monitor",
+  "codeowners": ["@kirvis13"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/kirvis13/weheat-monitor-ha",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/kirvis13/weheat-monitor-ha/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

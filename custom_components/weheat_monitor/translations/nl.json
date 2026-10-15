@@ -1,0 +1,88 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Weheat Monitor",
+        "description": "Koppel Home Assistant aan je Weheat Monitor-account. De sleutel wordt meteen getoetst.",
+        "data": {
+          "api_key": "Sleutel",
+          "base_url": "Adres"
+        },
+        "data_description": {
+          "api_key": "Begint met whm_. Maak hem op weheat-monitor.nl onder Instellingen, Koppelingen; hij is maar één keer te zien.",
+          "base_url": "Laat staan, tenzij je tegen een andere server test."
+        }
+      },
+      "thermostat": {
+        "title": "Thermostaat",
+        "description": "Elke minuut gaan de kamertemperatuur en het setpoint naar Weheat Monitor, met merk en model van de thermostaat. De thermostaat volgt het plan alleen als het plan live staat op weheat-monitor.nl én de schakelaar Plan volgen aan staat (standaard uit).",
+        "data": {
+          "climate_entity": "Thermostaat",
+          "room_temp": "Kamertemperatuursensor"
+        },
+        "data_description": {
+          "climate_entity": "Een climate-entiteit met één doeltemperatuur.",
+          "room_temp": "Optioneel. Alleen als een losse sensor de kamer beter meet dan de thermostaat."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nieuwe sleutel",
+        "description": "De sleutel werd geweigerd (ingetrokken?). Maak een nieuwe op weheat-monitor.nl en plak hem hier.",
+        "data": {
+          "api_key": "Sleutel"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Sleutel klopt niet",
+      "invalid_key_format": "Een sleutel is whm_ gevolgd door 64 tekens 0-9 en a-f",
+      "cannot_connect": "Weheat Monitor is niet bereikbaar, probeer het later opnieuw"
+    },
+    "abort": {
+      "already_configured": "Deze sleutel is al in gebruik",
+      "already_in_progress": "Deze sleutel wordt al ingesteld",
+      "reauth_successful": "Sleutel bijgewerkt"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Thermostaat",
+        "description": "Wijzig de thermostaat of de kamersensor.",
+        "data": {
+          "climate_entity": "Thermostaat",
+          "room_temp": "Kamertemperatuursensor"
+        },
+        "data_description": {
+          "climate_entity": "Een climate-entiteit met één doeltemperatuur.",
+          "room_temp": "Optioneel. Alleen als een losse sensor de kamer beter meet dan de thermostaat."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_sync": {
+        "name": "Laatste sync",
+        "state_attributes": {
+          "queue_length": {
+            "name": "Wachtrij"
+          }
+        }
+      },
+      "active_setpoint": {
+        "name": "Actief setpoint"
+      }
+    },
+    "binary_sensor": {
+      "plan_live": {
+        "name": "Plan live"
+      }
+    },
+    "switch": {
+      "follow_plan": {
+        "name": "Plan volgen"
+      }
+    }
+  }
+}
