@@ -155,7 +155,6 @@ def decide(
     now: datetime,
     *,
     follow: bool,
-    plan_live: bool,
     blocks: list[dict[str, Any]],
     base_setpoint: float | None,
     current: float | None,
@@ -163,8 +162,10 @@ def decide(
 ) -> tuple[Decision, dict[str, Any]]:
     """What should the integration write to the thermostat now?
 
-    Steers only when the server says plan_live and the user's "Follow plan"
-    switch is on. Without a valid block it returns to base_setpoint once and
+    Steers only when the user's "Follow plan" switch is on. The blocks are
+    trusted as the server sends them: with plan_live off it sends only the
+    blocks of a thermostat test (an older server sends none), so plan_live is
+    no gate here. Without a valid block it returns to base_setpoint once and
     then leaves the thermostat alone. `quantize` rounds a target to what the
     thermostat can show (its step and limits); the result is clamped again,
     so nothing outside 12-24 °C ever leaves this function.
@@ -185,7 +186,7 @@ def decide(
         c["plan_id"] = None
         return Decision(None, None, "follow plan is off"), c
 
-    block = pick_block(blocks, now) if plan_live else None
+    block = pick_block(blocks, now)
     if block is not None:
         target = target_for(block["setpoint"])
         plan_id = block.get("plan_id")
@@ -209,3 +210,58 @@ def decide(
         return Decision(base, None, "no plan, back to base"), c
 
     return Decision(None, None, "no plan"), c
+
+
+# ─── Status ─────────────────────────────────────────────────────────────────
+
+PLAN_STATUSES = [
+    "test_paused",
+    "test_scheduled",
+    "test_waiting",
+    "test_step",
+    "test_rest",
+    "follow_off",
+    "following",
+    "plan_idle",
+    "no_plan",
+]
+
+
+def plan_status(state: dict[str, Any], now: datetime) -> str:
+    """Why the thermostat does (or does not) follow a block now: the first rule that fits."""
+    block = pick_block(state.get("blocks") or [], now)
+    test = state.get("test")
+    if isinstance(test, dict):
+        status = test.get("status")
+        if status == "paused":
+            return "test_paused"
+        if status == "planned":
+            try:
+                planned_at = parse_time(test["planned_at"])
+            except (KeyError, TypeError, ValueError, AttributeError):
+                planned_at = None
+            return "test_scheduled" if planned_at is not None and planned_at > now else "test_waiting"
+        if status == "running":
+            if block is not None and not state.get("follow"):
+                return "follow_off"  # a step applies, but nothing is sent
+            return "test_step" if block is not None else "test_rest"
+    if block is not None:
+        return "following" if state.get("follow") else "follow_off"
+    if state.get("plan_live"):
+        return "plan_idle"
+    return "no_plan"
+
+
+def next_block(blocks: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
+    """The block that starts next: start > now, the earliest start."""
+    best = None
+    best_start = None
+    for b in blocks or []:
+        try:
+            start = parse_time(b["start"])
+            float(b["setpoint"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if start > now and (best_start is None or start < best_start):
+            best, best_start = b, start
+    return best

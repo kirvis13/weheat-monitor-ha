@@ -72,6 +72,20 @@
       },
       "active_setpoint": {
         "name": "Active setpoint"
+      },
+      "plan_status": {
+        "name": "Status",
+        "state": {
+          "test_paused": "Test paused",
+          "test_scheduled": "Test scheduled",
+          "test_waiting": "Test waiting for the heat pump to heat",
+          "test_step": "Test step running",
+          "test_rest": "Test: rest between steps",
+          "follow_off": "Follow plan is off",
+          "following": "Following the plan",
+          "plan_idle": "Plan live, no block now",
+          "no_plan": "No plan"
+        }
       }
     },
     "binary_sensor": {

@@ -72,6 +72,20 @@
       },
       "active_setpoint": {
         "name": "Actief setpoint"
+      },
+      "plan_status": {
+        "name": "Status",
+        "state": {
+          "test_paused": "Test gepauzeerd",
+          "test_scheduled": "Test ingepland",
+          "test_waiting": "Test wacht tot de pomp verwarmt",
+          "test_step": "Teststap loopt",
+          "test_rest": "Test: rust tussen de stappen",
+          "follow_off": "Plan volgen staat uit",
+          "following": "Volgt het plan",
+          "plan_idle": "Plan live, nu geen blok",
+          "no_plan": "Geen plan"
+        }
       }
     },
     "binary_sensor": {

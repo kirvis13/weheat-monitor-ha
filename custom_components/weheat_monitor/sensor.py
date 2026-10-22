@@ -1,4 +1,4 @@
-"""Sensors: last sync and the active block of the plan."""
+"""Sensors: last sync, the active block of the plan and the plan status."""
 
 from __future__ import annotations
 
@@ -12,14 +12,18 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WeheatMonitorConfigEntry
 from .entity import WeheatMonitorEntity
-from .logic import clamp
+from .logic import PLAN_STATUSES, clamp
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: WeheatMonitorConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities([LastSyncSensor(coordinator, "last_sync"), ActiveSetpointSensor(coordinator, "active_setpoint")])
+    async_add_entities([
+        LastSyncSensor(coordinator, "last_sync"),
+        ActiveSetpointSensor(coordinator, "active_setpoint"),
+        PlanStatusSensor(coordinator, "plan_status"),
+    ])
 
 
 class LastSyncSensor(WeheatMonitorEntity, SensorEntity):
@@ -64,8 +68,32 @@ class ActiveSetpointSensor(WeheatMonitorEntity, SensorEntity):
             "reason": block.get("reason"),
             "start": block.get("start"),
             "end": block.get("end"),
+            "next_block_start": (d["next_block"] or {}).get("start"),
             "base_setpoint": d["base_setpoint"],
             "blocks_stored": d["block_count"],
             "decision": d["decision"],
             "manual_pause_until": d["manual_until"],
+        }
+
+
+class PlanStatusSensor(WeheatMonitorEntity, SensorEntity):
+    """Why the thermostat does or does not follow a block now, including the thermostat test."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = PLAN_STATUSES
+
+    @property
+    def native_value(self) -> str:
+        return self.coordinator.data["plan_status"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = self.coordinator.data
+        nxt = d["next_block"]
+        return {
+            "next_block_start": nxt.get("start") if nxt else None,
+            "next_setpoint": clamp(nxt["setpoint"]) if nxt else None,
+            "test_phase": d["test_phase"],
+            "test_planned_at": d["test_planned_at"],
+            "pause_reason": d["pause_reason"],
         }
