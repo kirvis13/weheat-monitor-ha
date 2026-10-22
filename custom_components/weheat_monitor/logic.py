@@ -242,6 +242,8 @@ def plan_status(state: dict[str, Any], now: datetime) -> str:
                 planned_at = None
             return "test_scheduled" if planned_at is not None and planned_at > now else "test_waiting"
         if status == "running":
+            if block is not None and not state.get("follow"):
+                return "follow_off"  # a step applies, but nothing is sent
             return "test_step" if block is not None else "test_rest"
     if block is not None:
         return "following" if state.get("follow") else "follow_off"

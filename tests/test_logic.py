@@ -220,7 +220,9 @@ def test_status_order_on_overlap():
     # A paused or planned test wins over a block that applies now, and over the switch.
     assert status({"status": "paused"}, [NOW_BLOCK], follow=False) == "test_paused"
     assert status({"status": "planned", "planned_at": iso(T0 + timedelta(hours=1))}, [NOW_BLOCK]) == "test_scheduled"
-    assert status({"status": "running"}, [NOW_BLOCK], follow=False) == "test_step"
+    # A running test step with Follow plan off sends nothing: say so.
+    assert status({"status": "running"}, [NOW_BLOCK], follow=False) == "follow_off"
+    assert status({"status": "running"}, [LATER], follow=False) == "test_rest"
     # A block from a test while plan_live is off is still followed.
     assert status(None, [NOW_BLOCK], plan_live=False) == "following"
 

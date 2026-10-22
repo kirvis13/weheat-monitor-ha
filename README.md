@@ -86,7 +86,7 @@ What you notice:
 
 - The setpoint on your thermostat changes every half hour or so, never above 24 °C. Your house does not get warmer: for the test the site asks you to change one setting in the Weheat app, and walks you through changing it back afterwards.
 - Changing the setpoint yourself pauses steering for 4 hours, as always. Stopping the test on the site removes the remaining blocks; the thermostat then goes back to the base setpoint once.
-- `sensor.weheat_monitor_status` says where the test is: scheduled, waiting until the heat pump heats (up to 24 hours), a step running, the rest between steps, or paused (with `pause_reason`). While it waits or rests, "Active setpoint" is empty; that is expected.
+- `sensor.weheat_monitor_status` says where the test is: scheduled, waiting until the heat pump heats (up to 24 hours), a step running, the rest between steps, or paused (with `pause_reason`). With **Follow plan** off during a step it shows `follow_off`, because nothing is sent. While it waits or rests, "Active setpoint" is empty; that is expected.
 - Nothing extra is sent: the test uses the measurements listed under "What is sent".
 
 ## Offline and failures
