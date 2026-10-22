@@ -2,7 +2,9 @@
 
 Behaves like the server: Bearer key, at most 100
 measurements and 20 applied per call, one row per minute (a repeat counts as
-`duplicates`), measurements older than 24 h are `skipped`.
+`duplicates`), measurements older than 24 h are `skipped`. With plan_live off
+only the blocks of a thermostat test (reason `test:...`) are sent, and `test`
+describes the open test (None; "omit" leaves the field out like an old server).
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ class FakeApi:
         self.plan_live = True
         self.base_setpoint = 19.0
         self.blocks: list[dict[str, Any]] = []
+        self.test: Any = None
         self.now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 
     async def handle(self, request: web.Request) -> web.Response:
@@ -53,11 +56,17 @@ class FakeApi:
         self.applied.extend(applied)
         if body.get("thermostat"):
             self.thermostats.append(body["thermostat"])
-        return web.json_response({
+        blocks = self.blocks if self.plan_live else [
+            b for b in self.blocks if str(b.get("reason", "")).startswith("test:")
+        ]
+        answer = {
             "stored": stored, "duplicates": duplicates, "skipped": skipped,
             "plan_live": self.plan_live, "base_setpoint": self.base_setpoint,
-            "blocks": self.blocks if self.plan_live else [],
-        })
+            "blocks": blocks,
+        }
+        if self.test != "omit":
+            answer["test"] = self.test
+        return web.json_response(answer)
 
     def app(self) -> web.Application:
         app = web.Application()

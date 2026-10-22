@@ -11,7 +11,9 @@ from wm.logic import (
     initial_control,
     is_manual_change,
     manual_override,
+    next_block,
     pick_block,
+    plan_status,
 )
 from wm.units import convert, parse_number
 
@@ -27,8 +29,8 @@ def block(plan_id, start, end, setpoint, created):
             "reason": "test", "created_at": iso(created)}
 
 
-def run(control, now, blocks=(), current=19.0, follow=True, plan_live=True, base=19.0, quantize=None):
-    return decide(control, now, follow=follow, plan_live=plan_live, blocks=list(blocks),
+def run(control, now, blocks=(), current=19.0, follow=True, base=19.0, quantize=None):
+    return decide(control, now, follow=follow, blocks=list(blocks),
                   base_setpoint=base, current=current, quantize=quantize)
 
 
@@ -102,16 +104,23 @@ def test_follows_block_then_back_to_base_once():
     assert d.target is None  # someone else's 21 is left alone afterwards
 
 
-def test_no_steering_without_plan_live_or_switch():
+def test_no_steering_without_switch():
     b = block(1, T0, T0 + timedelta(hours=1), 21, T0)
-    assert run(initial_control(), T0, [b], plan_live=False)[0].target is None
     assert run(initial_control(), T0, [b], follow=False)[0].target is None
 
 
+def test_blocks_steer_without_plan_live():
+    # With plan_live off the server sends only test blocks; those must steer.
+    b = block(1, T0, T0 + timedelta(hours=1), 21, T0)
+    d, _ = run(initial_control(), T0, [b])
+    assert (d.target, d.plan_id) == (21.0, 1)
+
+
 def test_plan_live_off_while_steering_returns_to_base():
+    # Plan switched off on the site: the server stops sending its blocks.
     b = block(1, T0, T0 + timedelta(hours=1), 21, T0)
     _, c = run(initial_control(), T0, [b])
-    d, _ = run(c, T0 + timedelta(minutes=5), [b], plan_live=False, current=21)
+    d, _ = run(c, T0 + timedelta(minutes=5), [], current=21)
     assert d.target == 19.0
 
 
@@ -183,3 +192,54 @@ def test_units():
     assert convert(2500, "energy", "Wh") == 2.5
     assert convert(68, "temperature", "°F") == 20.0
     assert convert(12, "power", "VA") is None  # unknown unit: better nothing than wrong
+
+
+# ─── Plan status ────────────────────────────────────────────────────────────
+
+NOW_BLOCK = block(1, T0 - timedelta(minutes=10), T0 + timedelta(minutes=20), 21, T0 - timedelta(hours=1))
+LATER = block(2, T0 + timedelta(hours=1), T0 + timedelta(hours=2), 30, T0 - timedelta(hours=1))
+
+
+def status(test=None, blocks=(), follow=True, plan_live=True, now=T0):
+    return plan_status({"test": test, "blocks": list(blocks), "follow": follow, "plan_live": plan_live}, now)
+
+
+def test_status_every_row():
+    assert status({"status": "paused", "pause_reason": "x"}) == "test_paused"
+    assert status({"status": "planned", "planned_at": iso(T0 + timedelta(hours=1))}) == "test_scheduled"
+    assert status({"status": "planned", "planned_at": iso(T0 - timedelta(hours=1))}) == "test_waiting"
+    assert status({"status": "running", "phase": "A"}, [NOW_BLOCK]) == "test_step"
+    assert status({"status": "running", "phase": "B"}, [LATER]) == "test_rest"
+    assert status(None, [NOW_BLOCK], follow=False) == "follow_off"
+    assert status(None, [NOW_BLOCK]) == "following"
+    assert status(None, [LATER]) == "plan_idle"
+    assert status(None, [LATER], plan_live=False) == "no_plan"
+
+
+def test_status_order_on_overlap():
+    # A paused or planned test wins over a block that applies now, and over the switch.
+    assert status({"status": "paused"}, [NOW_BLOCK], follow=False) == "test_paused"
+    assert status({"status": "planned", "planned_at": iso(T0 + timedelta(hours=1))}, [NOW_BLOCK]) == "test_scheduled"
+    assert status({"status": "running"}, [NOW_BLOCK], follow=False) == "test_step"
+    # A block from a test while plan_live is off is still followed.
+    assert status(None, [NOW_BLOCK], plan_live=False) == "following"
+
+
+def test_status_planned_at_equal_to_now_is_waiting():
+    assert status({"status": "planned", "planned_at": iso(T0)}) == "test_waiting"
+    assert status({"status": "planned", "planned_at": None}) == "test_waiting"
+
+
+def test_status_without_test_field_old_server():
+    assert plan_status({"blocks": [NOW_BLOCK], "follow": True, "plan_live": True}, T0) == "following"
+    assert plan_status({"blocks": [], "plan_live": False}, T0) == "no_plan"
+    assert status("garbage", [LATER]) == "plan_idle"
+
+
+def test_next_block_earliest_future_start():
+    soon = block(3, T0 + timedelta(minutes=30), T0 + timedelta(hours=1), 19, T0)
+    assert next_block([LATER, NOW_BLOCK, soon], T0) is soon
+    assert next_block([NOW_BLOCK], T0) is None  # already started
+    starts_now = block(4, T0, T0 + timedelta(hours=1), 19, T0)
+    assert next_block([starts_now], T0) is None  # start must be later than now
+    assert next_block([{"start": "x", "setpoint": 1}, LATER], T0) is LATER

@@ -31,7 +31,7 @@ from .const import (
     UPDATE_INTERVAL_SECONDS,
 )
 from .engine import SyncEngine
-from .logic import clamp, is_manual_change, parse_time
+from .logic import clamp, is_manual_change, next_block, parse_time, plan_status
 from .units import celsius_to_fahrenheit, convert, fahrenheit_to_celsius, parse_number
 
 _LOGGER = logging.getLogger(__name__)
@@ -257,6 +257,8 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now = now or dt_util.utcnow()
         s = self.engine.state
         until = s["control"].get("manual_until")
+        test = s.get("test") or {}
+        nxt = next_block(s["blocks"], now)
         return {
             "last_sync": parse_time(s["last_sync"]) if s.get("last_sync") else None,
             "last_result": s.get("last_result"),
@@ -266,6 +268,11 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "base_setpoint": s["base_setpoint"],
             "follow": s["follow"],
             "active_block": self.engine.active_block(now),
+            "next_block": nxt,
+            "plan_status": plan_status(s, now),
+            "test_phase": test.get("phase"),
+            "test_planned_at": test.get("planned_at"),
+            "pause_reason": test.get("pause_reason"),
             "block_count": len(s["blocks"]),
             "decision": s.get("last_decision"),
             "manual_until": until if until and parse_time(until) > now else None,

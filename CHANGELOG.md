@@ -2,6 +2,12 @@
 
 Versions follow [Semantic Versioning](https://semver.org). The newest version is on top.
 
+## 0.2.0 (2026-10-22)
+
+- New sensor **Status** (`sensor.weheat_monitor_status`): says why the thermostat does or does not follow a block now, including where a thermostat test is (scheduled, waiting for the heat pump, step, rest, paused). Attributes for the next block and the test.
+- "Active setpoint" gets the attribute `next_block_start`.
+- Fix: a thermostat test now also steers when the plan is not live on the site. The server then sends only the test blocks, and **Follow plan** stays the local switch.
+
 ## 0.1.0 (2026-10-15)
 
 First release.

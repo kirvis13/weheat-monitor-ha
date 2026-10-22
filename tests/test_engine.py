@@ -160,6 +160,46 @@ async def test_switch_off_or_plan_not_live_means_hands_off(env):
     assert th.writes == []
 
 
+async def test_test_blocks_steer_while_plan_not_live(env):
+    api, engine = env
+    engine.set_follow(True)
+    api.plan_live = False
+    t = api.now
+    api.blocks = [
+        {"plan_id": 8, "start": iso(t), "end": iso(t + timedelta(minutes=30)), "setpoint": 22.0,
+         "reason": "test:A1", "created_at": iso(t)},
+        {"plan_id": 9, "start": iso(t), "end": iso(t + timedelta(hours=1)), "setpoint": 18.0,
+         "reason": "night", "created_at": iso(t + timedelta(minutes=1))},  # not sent: plan not live
+    ]
+    th = Thermostat(19.0)
+    await tick(engine, api, 0, th)
+    assert th.writes == [22.0]
+    assert engine.active_block(t)["plan_id"] == 8
+
+
+async def test_test_object_is_stored(env):
+    api, engine = env
+    assert engine.state["test"] is None
+    api.test = {"status": "running", "phase": "A", "planned_at": iso(api.now), "pause_reason": None}
+    await tick(engine, api, 0)
+    assert engine.state["test"] == api.test
+    api.test = None
+    await tick(engine, api, 1)
+    assert engine.state["test"] is None
+
+
+async def test_test_missing_or_not_a_dict_is_none(env):
+    api, engine = env
+    api.test = {"status": "paused", "phase": None, "planned_at": iso(api.now), "pause_reason": "x"}
+    await tick(engine, api, 0)
+    api.test = "omit"  # an older server leaves the field out
+    await tick(engine, api, 1)
+    assert engine.state["test"] is None
+    api.test = ["running"]
+    await tick(engine, api, 2)
+    assert engine.state["test"] is None
+
+
 async def test_out_of_range_setpoint_is_clamped(env):
     api, engine = env
     engine.set_follow(True)

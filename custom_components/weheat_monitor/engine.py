@@ -49,6 +49,7 @@ def initial_state() -> dict[str, Any]:
         "applied_ids": [],  # recently reported plan_ids, so each is reported once
         "blocks": [],
         "plan_live": False,
+        "test": None,  # open thermostat test from the server, or None
         "base_setpoint": None,
         "follow": False,
         "control": initial_control(),
@@ -84,8 +85,6 @@ class SyncEngine:
         return self.state["control"].get("last_set")
 
     def active_block(self, now: datetime) -> dict[str, Any] | None:
-        if not self.state["plan_live"]:
-            return None
         return pick_block(self.state["blocks"], now)
 
     # ─── The tick ───────────────────────────────────────────────────────────
@@ -183,6 +182,9 @@ class SyncEngine:
         }
         if isinstance(answer.get("plan_live"), bool):
             self.state["plan_live"] = answer["plan_live"]
+        # An older server leaves the field out: no test.
+        test = answer.get("test")
+        self.state["test"] = test if isinstance(test, dict) else None
         base = answer.get("base_setpoint")
         if isinstance(base, (int, float)):
             self.state["base_setpoint"] = float(base)
@@ -206,7 +208,6 @@ class SyncEngine:
             self.state["control"],
             now,
             follow=self.state["follow"],
-            plan_live=self.state["plan_live"],
             blocks=self.state["blocks"],
             base_setpoint=self.state["base_setpoint"],
             current=current,

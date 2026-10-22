@@ -61,13 +61,14 @@ Weheat Monitor uses the room temperature for the night plan and the setpoint to 
 | Entity | What it shows |
 |---|---|
 | `sensor.weheat_monitor_last_sync` | Time of the last successful sync. Attributes: `queue_length`, `stored`, `duplicates`, `skipped`, `last_error` |
-| `sensor.weheat_monitor_active_setpoint` | Setpoint of the block that applies now (empty without one). Attributes: `plan_id`, `reason`, `start`, `end`, `base_setpoint`, `decision`, `manual_pause_until` |
+| `sensor.weheat_monitor_active_setpoint` | Setpoint of the block that applies now (empty without one). Attributes: `plan_id`, `reason`, `start`, `end`, `next_block_start`, `base_setpoint`, `decision`, `manual_pause_until` |
+| `sensor.weheat_monitor_status` | Why the thermostat does or does not follow a block now: `test_paused`, `test_scheduled`, `test_waiting`, `test_step`, `test_rest`, `follow_off`, `following`, `plan_idle` or `no_plan`. Attributes: `next_block_start`, `next_setpoint`, `test_phase`, `test_planned_at`, `pause_reason` |
 | `binary_sensor.weheat_monitor_plan_live` | On when the plan is switched live for this connection on weheat-monitor.nl |
 | `switch.weheat_monitor_follow_plan` | Your local off switch. **Off by default** |
 
 ## How steering works
 
-The thermostat is only written when **both** locks are open: `plan_live` on the site, and **Follow plan** in Home Assistant.
+The thermostat is only written when **both** locks are open: `plan_live` on the site, and **Follow plan** in Home Assistant. The one exception is a thermostat test you started on the site: its blocks also arrive while `plan_live` is off, and then only **Follow plan** has to be on.
 
 1. The block that applies now (`start <= now < end`) wins; when blocks overlap, the newest (`created_at`) wins.
 2. The setpoint is clamped to 12-24 °C, then rounded to the thermostat's own step and limits. Only `temperature` is set, never the HVAC mode.
@@ -79,12 +80,13 @@ The thermostat is only written when **both** locks are open: `plan_live` on the 
 
 Every thermostat turns "the room is too cold" into a requested water temperature in its own way, and that decides how long and how low your heat pump runs. Weheat Monitor will be able to measure this for your thermostat in a test of about two days, and show you the result as a profile of your thermostat.
 
-The integration does nothing special for it. The test is a series of ordinary plan blocks (their `reason` starts with `test:`), with the same two locks and rules as any plan: **Follow plan** on in Home Assistant, and the test started by you on the site.
+The integration does nothing special for it. The test is a series of ordinary plan blocks (their `reason` starts with `test:`), with the same rules as any plan: **Follow plan** on in Home Assistant, and the test started by you on the site. The plan itself does not have to be live.
 
 What you notice:
 
 - The setpoint on your thermostat changes every half hour or so, never above 24 °C. Your house does not get warmer: for the test the site asks you to change one setting in the Weheat app, and walks you through changing it back afterwards.
 - Changing the setpoint yourself pauses steering for 4 hours, as always. Stopping the test on the site removes the remaining blocks; the thermostat then goes back to the base setpoint once.
+- `sensor.weheat_monitor_status` says where the test is: scheduled, waiting until the heat pump heats (up to 24 hours), a step running, the rest between steps, or paused (with `pause_reason`). While it waits or rests, "Active setpoint" is empty; that is expected.
 - Nothing extra is sent: the test uses the measurements listed under "What is sent".
 
 ## Offline and failures
