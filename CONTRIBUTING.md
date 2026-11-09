@@ -29,7 +29,7 @@ pip install -r requirements_test.txt
 pytest -q
 ```
 
-`logic.py`, `engine.py`, `api.py`, `units.py` and `const.py` stay free of Home Assistant imports, so
+`logic.py`, `rooms.py`, `engine.py`, `api.py`, `units.py` and `const.py` stay free of Home Assistant imports, so
 the tests run without Home Assistant. CI also runs `hassfest` and the HACS action.
 
 ## The API

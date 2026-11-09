@@ -31,12 +31,29 @@
         "data": {
           "api_key": "API key"
         }
+      },
+      "rooms": {
+        "title": "Room sensors",
+        "description": "Optional. Choose temperature sensors in other rooms; each one goes to Weheat Monitor as a room, named after its area. Humidity, CO2 and air pressure from the same device, or the only one in the same area, go along. Only indoor sensors: an outdoor sensor belongs with the thermostat. At most {max}.",
+        "data": {
+          "room_sensors": "Temperature sensors",
+          "room_auto_extras": "Look up humidity, CO2 and air pressure"
+        },
+        "data_description": {
+          "room_sensors": "Leave empty to send no rooms.",
+          "room_auto_extras": "Off: only the temperature goes along."
+        }
+      },
+      "rooms_confirm": {
+        "title": "Rooms",
+        "description": "This goes to Weheat Monitor. Which room a sensor is in, its target and whether it counts, you set on weheat-monitor.nl under Settings, Connections.\n\n| Room | Temperature | Humidity | CO2 | Air pressure |\n|---|---|---|---|---|\n{rows}"
       }
     },
     "error": {
       "invalid_auth": "Key not accepted",
       "invalid_key_format": "A key is whm_ followed by 64 characters 0-9 and a-f",
-      "cannot_connect": "Cannot reach Weheat Monitor, try again later"
+      "cannot_connect": "Cannot reach Weheat Monitor, try again later",
+      "too_many_rooms": "At most {max} temperature sensors"
     },
     "abort": {
       "already_configured": "This key is already in use",
@@ -57,7 +74,26 @@
           "climate_entity": "A climate entity with a single target temperature.",
           "room_temp": "Optional. Only if a separate sensor measures the room better than the thermostat does."
         }
+      },
+      "rooms": {
+        "title": "Room sensors",
+        "description": "Optional. Choose temperature sensors in other rooms; each one goes to Weheat Monitor as a room, named after its area. Humidity, CO2 and air pressure from the same device, or the only one in the same area, go along. Only indoor sensors: an outdoor sensor belongs with the thermostat. At most {max}.",
+        "data": {
+          "room_sensors": "Temperature sensors",
+          "room_auto_extras": "Look up humidity, CO2 and air pressure"
+        },
+        "data_description": {
+          "room_sensors": "Leave empty to send no rooms.",
+          "room_auto_extras": "Off: only the temperature goes along."
+        }
+      },
+      "rooms_confirm": {
+        "title": "Rooms",
+        "description": "This goes to Weheat Monitor. Which room a sensor is in, its target and whether it counts, you set on weheat-monitor.nl under Settings, Connections.\n\n| Room | Temperature | Humidity | CO2 | Air pressure |\n|---|---|---|---|---|\n{rows}"
       }
+    },
+    "error": {
+      "too_many_rooms": "At most {max} temperature sensors"
     }
   },
   "entity": {
@@ -86,6 +122,9 @@
           "plan_idle": "Plan live, no block now",
           "no_plan": "No plan"
         }
+      },
+      "rooms": {
+        "name": "Rooms"
       }
     },
     "binary_sensor": {
@@ -96,7 +135,16 @@
     "switch": {
       "follow_plan": {
         "name": "Follow plan"
+      },
+      "send_rooms": {
+        "name": "Send rooms"
       }
+    }
+  },
+  "issues": {
+    "room_sensor_silent": {
+      "title": "Room sensor {name} is silent",
+      "description": "No new value from the room sensor {name} since {since}. Empty battery or out of range? Weheat Monitor skips this sensor until it reports again; this message disappears by itself."
     }
   }
 }

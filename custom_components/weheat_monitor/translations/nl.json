@@ -31,12 +31,29 @@
         "data": {
           "api_key": "Sleutel"
         }
+      },
+      "rooms": {
+        "title": "Ruimtesensoren",
+        "description": "Optioneel. Kies temperatuursensoren in andere ruimtes; elke sensor gaat naar Weheat Monitor als een ruimte, met de naam van zijn area. Vocht, CO2 en luchtdruk van hetzelfde apparaat, of de enige in dezelfde area, gaan mee. Alleen sensoren binnenshuis: een buitensensor hoort bij de thermostaat. Hooguit {max}.",
+        "data": {
+          "room_sensors": "Temperatuursensoren",
+          "room_auto_extras": "Vocht, CO2 en luchtdruk zoeken"
+        },
+        "data_description": {
+          "room_sensors": "Leeg laten: geen ruimtes versturen.",
+          "room_auto_extras": "Uit: alleen de temperatuur gaat mee."
+        }
+      },
+      "rooms_confirm": {
+        "title": "Ruimtes",
+        "description": "Dit gaat naar Weheat Monitor. In welke kamer een sensor ligt, het doel en of hij meetelt, stel je in op weheat-monitor.nl onder Instellingen, Koppelingen.\n\n| Ruimte | Temperatuur | Vocht | CO2 | Luchtdruk |\n|---|---|---|---|---|\n{rows}"
       }
     },
     "error": {
       "invalid_auth": "Sleutel klopt niet",
       "invalid_key_format": "Een sleutel is whm_ gevolgd door 64 tekens 0-9 en a-f",
-      "cannot_connect": "Weheat Monitor is niet bereikbaar, probeer het later opnieuw"
+      "cannot_connect": "Weheat Monitor is niet bereikbaar, probeer het later opnieuw",
+      "too_many_rooms": "Hooguit {max} temperatuursensoren"
     },
     "abort": {
       "already_configured": "Deze sleutel is al in gebruik",
@@ -57,7 +74,26 @@
           "climate_entity": "Een climate-entiteit met één doeltemperatuur.",
           "room_temp": "Optioneel. Alleen als een losse sensor de kamer beter meet dan de thermostaat."
         }
+      },
+      "rooms": {
+        "title": "Ruimtesensoren",
+        "description": "Optioneel. Kies temperatuursensoren in andere ruimtes; elke sensor gaat naar Weheat Monitor als een ruimte, met de naam van zijn area. Vocht, CO2 en luchtdruk van hetzelfde apparaat, of de enige in dezelfde area, gaan mee. Alleen sensoren binnenshuis: een buitensensor hoort bij de thermostaat. Hooguit {max}.",
+        "data": {
+          "room_sensors": "Temperatuursensoren",
+          "room_auto_extras": "Vocht, CO2 en luchtdruk zoeken"
+        },
+        "data_description": {
+          "room_sensors": "Leeg laten: geen ruimtes versturen.",
+          "room_auto_extras": "Uit: alleen de temperatuur gaat mee."
+        }
+      },
+      "rooms_confirm": {
+        "title": "Ruimtes",
+        "description": "Dit gaat naar Weheat Monitor. In welke kamer een sensor ligt, het doel en of hij meetelt, stel je in op weheat-monitor.nl onder Instellingen, Koppelingen.\n\n| Ruimte | Temperatuur | Vocht | CO2 | Luchtdruk |\n|---|---|---|---|---|\n{rows}"
       }
+    },
+    "error": {
+      "too_many_rooms": "Hooguit {max} temperatuursensoren"
     }
   },
   "entity": {
@@ -86,6 +122,9 @@
           "plan_idle": "Plan live, nu geen blok",
           "no_plan": "Geen plan"
         }
+      },
+      "rooms": {
+        "name": "Ruimtes"
       }
     },
     "binary_sensor": {
@@ -96,7 +135,16 @@
     "switch": {
       "follow_plan": {
         "name": "Plan volgen"
+      },
+      "send_rooms": {
+        "name": "Ruimtes versturen"
       }
+    }
+  },
+  "issues": {
+    "room_sensor_silent": {
+      "title": "Ruimtesensor {name} meldt niets",
+      "description": "Sinds {since} geen nieuwe waarde van de ruimtesensor {name}. Batterij leeg of buiten bereik? Weheat Monitor slaat deze sensor over tot hij weer meldt; deze melding verdwijnt dan vanzelf."
     }
   }
 }

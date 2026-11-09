@@ -5,6 +5,11 @@ measurements and 20 applied per call, one row per minute (a repeat counts as
 `duplicates`), measurements older than 24 h are `skipped`. With plan_live off
 only the blocks of a thermostat test (reason `test:...`) are sent, and `test`
 describes the open test (None; "omit" leaves the field out like an old server).
+
+`rooms`: at most 20 sensors and 100 readings per call (else 400), one reading
+per sensor per time (a repeat counts as `duplicates`), readings older than
+29 days `skipped`. With `rooms_supported = False` the field is ignored and
+left out of the answer, like a server from before November 2026.
 """
 
 from __future__ import annotations
@@ -28,6 +33,9 @@ class FakeApi:
         self.base_setpoint = 19.0
         self.blocks: list[dict[str, Any]] = []
         self.test: Any = None
+        self.rooms_supported = True
+        self.room_rows: dict[tuple[str, str], dict[str, Any]] = {}
+        self.room_names: dict[str, str] = {}
         self.now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 
     async def handle(self, request: web.Request) -> web.Response:
@@ -53,6 +61,27 @@ class FakeApi:
             else:
                 self.rows[m["measured_at"]] = m
                 stored += 1
+        room_result = None
+        rooms = body.get("rooms")
+        if rooms is not None and self.rooms_supported:
+            if not isinstance(rooms, list):
+                return web.json_response({"error": "rooms is not a list"}, status=400)
+            if len(rooms) > 20:
+                return web.json_response({"error": "at most 20 rooms per call"}, status=400)
+            if sum(len(r.get("readings") or []) for r in rooms) > 100:
+                return web.json_response({"error": "at most 100 room readings per call"}, status=400)
+            room_result = {"stored": 0, "duplicates": 0, "skipped": 0}
+            for r in rooms:
+                self.room_names[r["key"]] = r["name"]
+                for reading in r.get("readings") or []:
+                    t = datetime.fromisoformat(reading["measured_at"].replace("Z", "+00:00"))
+                    if t < self.now - timedelta(days=29) or not isinstance(reading.get("temp"), (int, float)):
+                        room_result["skipped"] += 1
+                    elif (r["key"], reading["measured_at"]) in self.room_rows:
+                        room_result["duplicates"] += 1
+                    else:
+                        self.room_rows[(r["key"], reading["measured_at"])] = reading
+                        room_result["stored"] += 1
         self.applied.extend(applied)
         if body.get("thermostat"):
             self.thermostats.append(body["thermostat"])
@@ -66,6 +95,8 @@ class FakeApi:
         }
         if self.test != "omit":
             answer["test"] = self.test
+        if room_result is not None:
+            answer["rooms"] = room_result
         return web.json_response(answer)
 
     def app(self) -> web.Application:

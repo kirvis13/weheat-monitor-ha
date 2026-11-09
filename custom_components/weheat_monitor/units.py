@@ -1,4 +1,4 @@
-"""Unit conversion to the units the API expects: °C, W, kWh and %.
+"""Unit conversion to the units the API expects: °C, W, kWh, %, ppm and hPa.
 
 No Home Assistant imports: the tests load this module on its own.
 """
@@ -7,6 +7,11 @@ from __future__ import annotations
 
 _POWER = {"W": 1.0, "kW": 1000.0, "MW": 1_000_000.0, "mW": 0.001}
 _ENERGY = {"Wh": 0.001, "kWh": 1.0, "MWh": 1000.0, "GWh": 1_000_000.0}
+# Air pressure to hPa, for every unit Home Assistant offers for atmospheric_pressure.
+_PRESSURE = {
+    "hPa": 1.0, "mbar": 1.0, "Pa": 0.01, "kPa": 10.0, "bar": 1000.0, "cbar": 10.0,
+    "mmHg": 1.333224, "inHg": 33.86389, "psi": 68.94757,
+}
 
 UNAVAILABLE = {"unavailable", "unknown", "none", ""}
 
@@ -36,8 +41,8 @@ def convert(value: float | None, kind: str, unit: str | None) -> float | None:
     """Convert a value in `unit` to the API unit for `kind`.
 
     An unknown unit is passed through for temperature and percentage (both
-    usually carry °C and %), but dropped for power and energy, where a wrong
-    factor of 1000 would poison the data.
+    usually carry °C and %), but dropped for power, energy, CO2 and pressure,
+    where a wrong factor would poison the data.
     """
     if value is None:
         return None
@@ -54,4 +59,9 @@ def convert(value: float | None, kind: str, unit: str | None) -> float | None:
     if kind == "energy":
         factor = _ENERGY.get(unit)
         return None if factor is None else value * factor
+    if kind == "pressure":
+        factor = _PRESSURE.get(unit)
+        return None if factor is None else round(value * factor, 1)
+    if kind == "co2":
+        return value if unit == "ppm" else None
     return value
