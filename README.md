@@ -43,11 +43,15 @@ Copy `custom_components/weheat_monitor` into the `custom_components` folder of y
 
 **Step 3, room sensors (optional).** Pick temperature sensors in other rooms, as many as you like up to 20. Each one goes to Weheat Monitor as a room, named after its area (or after the sensor without "Temperature" when it has no area), with the floor of that area. With **Look up humidity, CO2 and air pressure** on, the integration adds the humidity (`humidity`), CO2 (`carbon_dioxide`) and air pressure (`atmospheric_pressure`) sensor of the same device; without one on the device, the only one of that kind in the same area. Two of a kind in the area and none on the device: none, because a wrong sensor is worse than no value. Only indoor sensors: an outdoor sensor is not a room.
 
+<img src="docs/config-flow-3-rooms.png" alt="Room sensors step" width="480">
+
 A last step shows what will be sent per room, with the values of right now. Which room a sensor really is in, its target temperature and whether it counts are set on weheat-monitor.nl under Settings, Connections.
+
+<img src="docs/config-flow-4-rooms-confirm.png" alt="What is sent per room" width="480">
 
 Change the thermostat, the room sensor or the room sensors later with **Configure** on the integration.
 
-_Screenshots: Home Assistant 2026.2 with the demo integration and a stand-in for the API._
+_Screenshots: Home Assistant 2026.2 with stand-in entities and a stand-in for the API._
 
 ## What is sent
 
@@ -73,7 +77,11 @@ Weheat Monitor uses the room temperature for the night plan and the setpoint to 
 | `sensor.weheat_monitor_rooms` | How many chosen room sensors reported in the last two hours. Attributes: `configured`, `sending`, `queue_length`, `stored`, `duplicates`, `skipped`, `server_supports_rooms`, and `rooms`: per sensor the name, values, `last_measured` and `received` (the server has the newest reading) |
 | `switch.weheat_monitor_send_rooms` | Off: nothing about the room sensors leaves Home Assistant, and readings not yet sent are dropped. **On by default** |
 
+<img src="docs/device-entities.png" alt="The entities on the device page" width="320">
+
 A room sensor without a new value for two hours (empty battery, out of range) becomes a repair issue under **Settings, Repairs**. It disappears by itself once the sensor reports again. There is no entity per room: you have those already.
+
+<img src="docs/repair-room-silent.png" alt="Repair issue for a silent room sensor" width="480">
 
 ## How steering works
 

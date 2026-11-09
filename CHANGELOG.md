@@ -10,6 +10,8 @@ Versions follow [Semantic Versioning](https://semver.org). The newest version is
 - New switch **Send rooms** (`switch.weheat_monitor_send_rooms`), on by default.
 - A room sensor that stays silent for two hours becomes a repair issue, and disappears once it reports again.
 - Room readings have their own queue (up to 5,000 readings, 29 days). A server without support for rooms keeps them waiting instead of losing them.
+- Minimum Home Assistant version is now 2025.3.0. The integration already needed it; HACS now says so before installing.
+- README: screenshots of the room steps, the entities and the repair issue.
 
 ## 0.2.0 (2026-10-22)
 

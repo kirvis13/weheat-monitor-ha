@@ -257,7 +257,7 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for room in rooms:
                 last = room.get("last_updated") if room.get("temp") is not None else None
                 if is_silent(last, now):
-                    since = dt_util.as_local(room["last_updated"]).strftime("%d-%m %H:%M") if room.get("last_updated") else "?"
+                    since = dt_util.as_local(room["last_updated"]).strftime("%Y-%m-%d %H:%M") if room.get("last_updated") else "?"
                     wanted[f"room_silent_{room['key']}"] = {"name": room["name"], "since": since}
         for issue_id, placeholders in wanted.items():
             ir.async_create_issue(
