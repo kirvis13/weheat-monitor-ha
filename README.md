@@ -41,9 +41,17 @@ Copy `custom_components/weheat_monitor` into the `custom_components` folder of y
 
 <img src="docs/config-flow-2-thermostat.png" alt="Thermostat step" width="480">
 
-Change the thermostat or the room sensor later with **Configure** on the integration.
+**Step 3, room sensors (optional).** Pick temperature sensors in other rooms, as many as you like up to 20. Each one goes to Weheat Monitor as a room, named after its area (or after the sensor without "Temperature" when it has no area), with the floor of that area. With **Look up humidity, CO2 and air pressure** on, the integration adds the humidity (`humidity`), CO2 (`carbon_dioxide`) and air pressure (`atmospheric_pressure`) sensor of the same device; without one on the device, the only one of that kind in the same area. Two of a kind in the area and none on the device: none, because a wrong sensor is worse than no value. Only indoor sensors: an outdoor sensor is not a room.
 
-_Screenshots: Home Assistant 2026.2 with the demo integration and a stand-in for the API._
+<img src="docs/config-flow-3-rooms.png" alt="Room sensors step" width="480">
+
+A last step shows what will be sent per room, with the values of right now. Which room a sensor really is in, its target temperature and whether it counts are set on weheat-monitor.nl under Settings, Connections.
+
+<img src="docs/config-flow-4-rooms-confirm.png" alt="What is sent per room" width="480">
+
+Change the thermostat, the room sensor or the room sensors later with **Configure** on the integration.
+
+_Screenshots: Home Assistant 2026.2 with stand-in entities and a stand-in for the API._
 
 ## What is sent
 
@@ -53,6 +61,7 @@ _Screenshots: Home Assistant 2026.2 with the demo integration and a stand-in for
 | Setpoint | The thermostat's target temperature | Every minute |
 | Manual change | `manual: true` on the first measurement after someone changed the setpoint | When it happens |
 | Thermostat | Integration (for example `tado`, `nest`, `honeywell`), make, model, temperature step, minimum and maximum, HVAC modes. No name, no entity id | At start-up, after a change, and once a day |
+| Room sensors (field `rooms`) | Per chosen sensor: a key (a hash of the entity id, so renaming in Home Assistant keeps the sensor), the name of its area, its floor, and a reading with temperature and, when found, humidity, CO2 (ppm) and air pressure (hPa), stamped with the time the sensor changed | A reading only when one of the values changed, never a repeat; name and floor every minute |
 
 Weheat Monitor uses the room temperature for the night plan and the setpoint to see what the plan did. Make and model let it account for how your thermostat behaves; whether the thermostat drives the heat pump on/off or via OpenTherm it already knows from Weheat. More values (P1 meter, a heat meter such as a Kamstrup) will come once the site does something with them.
 
@@ -65,6 +74,14 @@ Weheat Monitor uses the room temperature for the night plan and the setpoint to 
 | `sensor.weheat_monitor_status` | Why the thermostat does or does not follow a block now: `test_paused`, `test_scheduled`, `test_waiting`, `test_step`, `test_rest`, `follow_off`, `following`, `plan_idle` or `no_plan`. Attributes: `next_block_start`, `next_setpoint`, `test_phase`, `test_planned_at`, `pause_reason` |
 | `binary_sensor.weheat_monitor_plan_live` | On when the plan is switched live for this connection on weheat-monitor.nl |
 | `switch.weheat_monitor_follow_plan` | Your local off switch. **Off by default** |
+| `sensor.weheat_monitor_rooms` | How many chosen room sensors reported in the last two hours. Attributes: `configured`, `sending`, `queue_length`, `stored`, `duplicates`, `skipped`, `server_supports_rooms`, and `rooms`: per sensor the name, values, `last_measured` and `received` (the server has the newest reading) |
+| `switch.weheat_monitor_send_rooms` | Off: nothing about the room sensors leaves Home Assistant, and readings not yet sent are dropped. **On by default** |
+
+<img src="docs/device-entities.png" alt="The entities on the device page" width="320">
+
+A room sensor without a new value for two hours (empty battery, out of range) becomes a repair issue under **Settings, Repairs**. It disappears by itself once the sensor reports again. There is no entity per room: you have those already.
+
+<img src="docs/repair-room-silent.png" alt="Repair issue for a silent room sensor" width="480">
 
 ## How steering works
 
@@ -96,10 +113,11 @@ What you notice:
 - After a lost answer the same minutes arrive twice; the server counts them as `duplicates`, which is normal.
 - A 401 (key revoked) starts the re-authentication flow: paste a new key.
 - The stored plan keeps running without internet until its last block ends; then back to the base setpoint once.
+- Room readings have their own queue: up to 5,000 readings and 29 days (the server takes them up to 29 days old), sent at most 100 per call along with the minute measurements. A server that does not know `rooms` yet answers without it; the readings then stay queued until it does.
 
 ## Privacy
 
-The key goes only into the `Authorization: Bearer` header; it is never logged, and stored only where Home Assistant keeps credentials. Only what is listed under "What is sent" leaves your house, and only to weheat-monitor.nl. Removing the integration also deletes its local queue and plan. Revoke the key on the site to stop everything at once.
+The key goes only into the `Authorization: Bearer` header; it is never logged, and stored only where Home Assistant keeps credentials. Only what is listed under "What is sent" leaves your house, and only to weheat-monitor.nl. For room sensors that includes the names of your areas and floors; temperature, humidity and CO2 per room also say something about when people are home, so they are shown only to you on the site. **Send rooms** off stops them at once. Removing the integration also deletes its local queue and plan. Revoke the key on the site to stop everything at once.
 
 ## Development
 

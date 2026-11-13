@@ -21,6 +21,7 @@ from .const import (
     MAX_MEASUREMENTS_PER_CALL,
     THERMOSTAT_REPORT_SECONDS,
 )
+from .rooms import build_rooms_payload, enqueue_room_readings
 from .logic import (
     Decision,
     build_measurement,
@@ -61,6 +62,14 @@ def initial_state() -> dict[str, Any]:
         "last_decision": None,
         "thermostat_hash": None,  # what was last reported about the thermostat
         "thermostat_at": None,  # and when
+        # Room sensors (field `rooms`).
+        "send_rooms": True,  # the switch "Send rooms"
+        "room_meta": {},  # key -> {"name", "floor"} of every chosen sensor
+        "room_queue": [],  # readings not yet confirmed by the server
+        "room_last": {},  # key -> measured_at of the newest queued reading
+        "room_result": None,  # {"stored", "duplicates", "skipped"} of the last call with rooms
+        "rooms_supported": None,  # False: the server answered without `rooms` (an older server)
+        "room_issues": [],  # repair issues this integration created for silent sensors
     }
 
 
@@ -80,6 +89,25 @@ class SyncEngine:
     def set_follow(self, on: bool) -> None:
         self.state["follow"] = bool(on)
 
+    def set_send_rooms(self, on: bool) -> None:
+        """Off: nothing about room sensors goes to the server, and the queue is emptied."""
+        self.state["send_rooms"] = bool(on)
+        if not on:
+            self.state["room_queue"] = []
+            self.state["room_last"] = {}
+
+    def _take_rooms(self, now: datetime, rooms: list[dict[str, Any]] | None) -> None:
+        """Queue a reading for every room sensor that has a new value."""
+        if not self.state.get("send_rooms", True) or rooms is None:
+            self.state["room_meta"] = {}
+            self.state["room_queue"] = []
+            self.state["room_last"] = {}
+            return
+        self.state["room_meta"] = {r["key"]: {"name": r["name"], "floor": r.get("floor")} for r in rooms}
+        self.state["room_queue"], self.state["room_last"] = enqueue_room_readings(
+            self.state.get("room_queue") or [], self.state.get("room_last") or {}, rooms, now,
+        )
+
     @property
     def last_set(self) -> float | None:
         return self.state["control"].get("last_set")
@@ -98,8 +126,13 @@ class SyncEngine:
         set_temperature: SetTemperature | None = None,
         quantize: Callable[[float], float] | None = None,
         thermostat: dict[str, Any] | None = None,
+        rooms: list[dict[str, Any]] | None = None,
     ) -> Decision | None:
-        """Queue this minute's measurement, sync, then steer.
+        """Queue this minute's measurement and new room readings, sync, then steer.
+
+        rooms: one snapshot per chosen room sensor ({"key", "name", "floor",
+        "measured_at", "temp", "humidity", "co2", "pressure"}), or None when
+        none are chosen.
 
         Raises AuthError (the coordinator starts a reauth); every other
         failure is kept in state and retried on a later tick.
@@ -109,6 +142,7 @@ class SyncEngine:
         control["manual_pending"] = False
         self.state["control"] = control
         self.state["queue"] = enqueue(self.state["queue"], build_measurement(now, fields, manual), now)
+        self._take_rooms(now, rooms)
 
         await self._sync(now, self._thermostat_due(thermostat, now))
 
@@ -136,8 +170,10 @@ class SyncEngine:
         for _ in range(MAX_BATCHES_PER_TICK):
             batch = self.state["queue"][:MAX_MEASUREMENTS_PER_CALL]
             applied = self.state["pending_applied"][:MAX_APPLIED_PER_CALL]
+            meta = self.state.get("room_meta") or {}
+            rooms, room_taken = build_rooms_payload(meta, self.state.get("room_queue") or []) if meta else ([], 0)
             try:
-                answer = await self.client.sync(batch, applied, thermostat=thermostat)
+                answer = await self.client.sync(batch, applied, thermostat=thermostat, rooms=rooms or None)
             except AuthError:
                 self.state["last_error"] = "invalid_auth"
                 raise
@@ -146,8 +182,9 @@ class SyncEngine:
                 _LOGGER.warning("Weheat Monitor rejected %d measurements: %s", len(batch), err)
                 self.state["queue"] = self.state["queue"][len(batch):]
                 self.state["pending_applied"] = self.state["pending_applied"][len(applied):]
+                self.state["room_queue"] = self.state["room_queue"][room_taken:]
                 self.state["last_error"] = str(err)
-                if not self.state["queue"] and not self.state["pending_applied"]:
+                if not self._more_to_send():
                     return
                 continue
             except ApiError as err:
@@ -164,13 +201,27 @@ class SyncEngine:
 
             self.state["queue"] = self.state["queue"][len(batch):]
             self.state["pending_applied"] = self.state["pending_applied"][len(applied):]
+            if rooms:
+                result = answer.get("rooms")
+                if isinstance(result, dict):
+                    # Confirmed: these readings are stored (or were already there, or never will be).
+                    self.state["room_queue"] = self.state["room_queue"][room_taken:]
+                    self.state["room_result"] = {k: result.get(k) for k in ("stored", "duplicates", "skipped")}
+                    self.state["rooms_supported"] = True
+                else:
+                    # An older server ignores `rooms`: keep the readings until it knows them.
+                    self.state["rooms_supported"] = False
             self._store_answer(answer, now)
             if thermostat:
                 self.state["thermostat_hash"] = _fingerprint(thermostat)
                 self.state["thermostat_at"] = iso(now)
                 thermostat = None
-            if not self.state["queue"] and not self.state["pending_applied"]:
+            if not self._more_to_send():
                 return
+
+    def _more_to_send(self) -> bool:
+        rooms_waiting = bool(self.state.get("room_queue")) and self.state.get("rooms_supported") is not False
+        return bool(self.state["queue"] or self.state["pending_applied"] or rooms_waiting)
 
     def _store_answer(self, answer: dict[str, Any], now: datetime) -> None:
         self.state["failures"] = 0

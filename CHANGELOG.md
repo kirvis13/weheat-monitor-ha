@@ -2,6 +2,17 @@
 
 Versions follow [Semantic Versioning](https://semver.org). The newest version is on top.
 
+## 0.3.0 (2026-11-09)
+
+- **Room sensors.** A new step in the setup and in **Configure**: pick temperature sensors in other rooms (up to 20). Each one goes to weheat-monitor.nl as a room, named after its area, with its floor. Humidity, CO2 and air pressure of the same device, or the only one in the same area, go along. A last step shows what will be sent.
+- Only new values are sent, stamped with the time the sensor changed; a reading is never repeated.
+- New sensor **Rooms** (`sensor.weheat_monitor_rooms`): how many room sensors reported in the last two hours, with the values per room in the attributes.
+- New switch **Send rooms** (`switch.weheat_monitor_send_rooms`), on by default.
+- A room sensor that stays silent for two hours becomes a repair issue, and disappears once it reports again.
+- Room readings have their own queue (up to 5,000 readings, 29 days). A server without support for rooms keeps them waiting instead of losing them.
+- Minimum Home Assistant version is now 2025.3.0. The integration already needed it; HACS now says so before installing.
+- README: screenshots of the room steps, the entities and the repair issue.
+
 ## 0.2.0 (2026-10-22)
 
 - New sensor **Status** (`sensor.weheat_monitor_status`): says why the thermostat does or does not follow a block now, including where a thermostat test is (scheduled, waiting for the heat pump, step, rest, paused). Attributes for the next block and the test.

@@ -1,4 +1,4 @@
-"""Sensors: last sync, the active block of the plan and the plan status."""
+"""Sensors: last sync, the active block of the plan, the plan status and the room sensors."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ async def async_setup_entry(
         LastSyncSensor(coordinator, "last_sync"),
         ActiveSetpointSensor(coordinator, "active_setpoint"),
         PlanStatusSensor(coordinator, "plan_status"),
+        RoomsSensor(coordinator, "rooms"),
     ])
 
 
@@ -96,4 +97,33 @@ class PlanStatusSensor(WeheatMonitorEntity, SensorEntity):
             "test_phase": d["test_phase"],
             "test_planned_at": d["test_planned_at"],
             "pause_reason": d["pause_reason"],
+        }
+
+
+class RoomsSensor(WeheatMonitorEntity, SensorEntity):
+    """How many chosen room sensors reported in the last two hours; per sensor the values in the attributes.
+
+    No entity per room: the user has those already. A sensor that stays
+    silent also becomes a repair issue.
+    """
+
+    _attr_suggested_display_precision = 0
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator.data["rooms_reporting"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = self.coordinator.data
+        result = d.get("room_result") or {}
+        return {
+            "configured": len(d["rooms"]),
+            "sending": d["send_rooms"],
+            "queue_length": d["room_queue_length"],
+            "stored": result.get("stored"),
+            "duplicates": result.get("duplicates"),
+            "skipped": result.get("skipped"),
+            "server_supports_rooms": d["rooms_supported"],
+            "rooms": d["rooms"],
         }

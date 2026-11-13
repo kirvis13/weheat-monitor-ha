@@ -1,4 +1,4 @@
-"""Config flow: the key (tested right away), then the thermostat and an optional room sensor."""
+"""Config flow: the key (tested right away), the thermostat with an optional room sensor, then the room sensors."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResu
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     TextSelector,
@@ -21,7 +22,18 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import ApiError, AuthError, WeheatMonitorClient, valid_key_format
-from .const import CONF_API_KEY, CONF_BASE_URL, CONF_CLIMATE, DEFAULT_BASE_URL, DOMAIN, SENSOR_FIELDS
+from .const import (
+    CONF_API_KEY,
+    CONF_BASE_URL,
+    CONF_CLIMATE,
+    CONF_ROOM_EXTRAS,
+    CONF_ROOM_SENSORS,
+    DEFAULT_BASE_URL,
+    DOMAIN,
+    MAX_ROOM_SENSORS,
+    SENSOR_FIELDS,
+)
+from .room_reader import overview_rows
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,11 +76,65 @@ def _clean(user_input: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in user_input.items() if v}
 
 
-class WeheatMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
+def _rooms_schema(current: Mapping[str, Any]) -> vol.Schema:
+    """Temperature sensors, several at once, and whether humidity, CO2 and pressure are looked up."""
+    return vol.Schema({
+        vol.Optional(CONF_ROOM_SENSORS, description={"suggested_value": current.get(CONF_ROOM_SENSORS) or []}): EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="temperature", multiple=True)
+        ),
+        vol.Optional(CONF_ROOM_EXTRAS, default=current.get(CONF_ROOM_EXTRAS, True)): BooleanSelector(),
+    })
+
+
+class _RoomSteps:
+    """The steps Rooms and the overview, shared by the config flow and the options flow."""
+
+    hass: HomeAssistant
+    _rooms: dict[str, Any]
+
+    def _current(self) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    def _finish(self) -> ConfigFlowResult:
+        raise NotImplementedError
+
+    async def async_step_rooms(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            sensors = list(user_input.get(CONF_ROOM_SENSORS) or [])
+            if len(sensors) > MAX_ROOM_SENSORS:
+                errors["base"] = "too_many_rooms"
+            else:
+                # Not through _clean: "look up humidity" off is a choice, not an empty field.
+                self._rooms = {CONF_ROOM_SENSORS: sensors, CONF_ROOM_EXTRAS: bool(user_input.get(CONF_ROOM_EXTRAS, True))}
+                return await self.async_step_rooms_confirm() if sensors else self._finish()
+        return self.async_show_form(  # type: ignore[attr-defined]
+            step_id="rooms", data_schema=_rooms_schema(user_input or self._current()), errors=errors,
+            description_placeholders={"max": str(MAX_ROOM_SENSORS)},
+        )
+
+    async def async_step_rooms_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self._finish()
+        rows = overview_rows(self.hass, self._rooms[CONF_ROOM_SENSORS], self._rooms[CONF_ROOM_EXTRAS], "-")
+        return self.async_show_form(  # type: ignore[attr-defined]
+            step_id="rooms_confirm", data_schema=vol.Schema({}), description_placeholders={"rows": rows},
+        )
+
+
+class WeheatMonitorConfigFlow(_RoomSteps, ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._options: dict[str, Any] = {}
+        self._rooms: dict[str, Any] = {}
+
+    def _current(self) -> Mapping[str, Any]:
+        return {}
+
+    def _finish(self) -> ConfigFlowResult:
+        return self.async_create_entry(title="Weheat Monitor", data=self._data, options={**self._options, **self._rooms})
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -101,7 +167,8 @@ class WeheatMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_thermostat(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="Weheat Monitor", data=self._data, options=_clean(user_input))
+            self._options = _clean(user_input)
+            return await self.async_step_rooms()
         return self.async_show_form(step_id="thermostat", data_schema=_thermostat_schema({}))
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
@@ -134,10 +201,21 @@ class WeheatMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         return WeheatMonitorOptionsFlow()
 
 
-class WeheatMonitorOptionsFlow(OptionsFlow):
-    """Change the thermostat or the room sensor later."""
+class WeheatMonitorOptionsFlow(_RoomSteps, OptionsFlow):
+    """Change the thermostat, the room sensor or the room sensors later."""
+
+    def __init__(self) -> None:
+        self._options: dict[str, Any] = {}
+        self._rooms: dict[str, Any] = {}
+
+    def _current(self) -> Mapping[str, Any]:
+        return self.config_entry.options
+
+    def _finish(self) -> ConfigFlowResult:
+        return self.async_create_entry(data={**self._options, **self._rooms})
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(data=_clean(user_input))
+            self._options = _clean(user_input)
+            return await self.async_step_rooms()
         return self.async_show_form(step_id="init", data_schema=_thermostat_schema(self.config_entry.options))

@@ -13,6 +13,7 @@ from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, UnitOfTemperat
 from homeassistant.core import Context, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -24,14 +25,19 @@ from .const import (
     CONF_API_KEY,
     CONF_BASE_URL,
     CONF_CLIMATE,
+    CONF_ROOM_EXTRAS,
+    CONF_ROOM_SENSORS,
     DEFAULT_BASE_URL,
     DOMAIN,
+    MAX_ROOM_SENSORS,
     SENSOR_FIELDS,
     SETPOINT_TOLERANCE,
     UPDATE_INTERVAL_SECONDS,
 )
 from .engine import SyncEngine
 from .logic import clamp, is_manual_change, next_block, parse_time, plan_status
+from .room_reader import companions, snapshots
+from .rooms import is_silent
 from .units import celsius_to_fahrenheit, convert, fahrenheit_to_celsius, parse_number
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,6 +65,7 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             entry.data[CONF_API_KEY],
         )
         self.engine = SyncEngine(client)
+        self._rooms: list[dict[str, Any]] = []
 
     # ─── Configuration (options win over data) ──────────────────────────────
 
@@ -70,6 +77,15 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def climate_entity(self) -> str | None:
         return self._conf(CONF_CLIMATE) or None
+
+    @property
+    def room_sensors(self) -> list[str]:
+        return list(self._conf(CONF_ROOM_SENSORS) or [])[:MAX_ROOM_SENSORS]
+
+    @property
+    def room_extras(self) -> bool:
+        value = self._conf(CONF_ROOM_EXTRAS)
+        return True if value is None else bool(value)
 
     # ─── Start and stop ─────────────────────────────────────────────────────
 
@@ -218,6 +234,58 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self.async_save()
         self._publish()
 
+    async def async_set_send_rooms(self, on: bool) -> None:
+        self.engine.set_send_rooms(on)
+        if not on:
+            self._update_room_issues([], dt_util.utcnow())
+        await self.async_save()
+        self._publish()
+
+    # ─── Room sensors ───────────────────────────────────────────────────────
+
+    def _read_rooms(self) -> list[dict[str, Any]]:
+        sensors = self.room_sensors
+        if not sensors:
+            return []
+        return snapshots(self.hass, sensors, companions(self.hass, sensors, self.room_extras))
+
+    @callback
+    def _update_room_issues(self, rooms: list[dict[str, Any]], now: datetime) -> None:
+        """A repair issue per room sensor without a new value for two hours; gone once it reports again."""
+        wanted: dict[str, dict[str, str]] = {}
+        if self.engine.state.get("send_rooms", True):
+            for room in rooms:
+                last = room.get("last_updated") if room.get("temp") is not None else None
+                if is_silent(last, now):
+                    since = dt_util.as_local(room["last_updated"]).strftime("%Y-%m-%d %H:%M") if room.get("last_updated") else "?"
+                    wanted[f"room_silent_{room['key']}"] = {"name": room["name"], "since": since}
+        for issue_id, placeholders in wanted.items():
+            ir.async_create_issue(
+                self.hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
+                translation_key="room_sensor_silent", translation_placeholders=placeholders,
+            )
+        for issue_id in set(self.engine.state.get("room_issues") or []) - set(wanted):
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+        self.engine.state["room_issues"] = sorted(wanted)
+
+    def _room_view(self, now: datetime) -> list[dict[str, Any]]:
+        """Per room sensor what the sensor entity shows: the values, when, and whether the server has it."""
+        s = self.engine.state
+        waiting = {r["key"] for r in s.get("room_queue") or []}
+        view = []
+        for room in self._rooms:
+            view.append({
+                "name": room["name"],
+                "entity_id": room["entity_id"],
+                "temperature": room.get("temp"),
+                "humidity": room.get("humidity"),
+                "co2": room.get("co2"),
+                "pressure": room.get("pressure"),
+                "last_measured": room.get("measured_at"),
+                "received": bool(room.get("measured_at")) and room["key"] not in waiting and s.get("rooms_supported") is True,
+            })
+        return view
+
     @callback
     def _publish(self) -> None:
         """Show a state change now, without waiting for the next minute."""
@@ -237,6 +305,7 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and state.attributes.get(ATTR_TEMPERATURE) is not None
         )
         current = self._climate_target_c(state) if steerable else None
+        self._rooms = self._read_rooms()
         try:
             await self.engine.tick(
                 now,
@@ -246,10 +315,12 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Compare against what the thermostat can really show (step, limits, °F).
                 quantize=(lambda t: self._quantize(state, t)) if steerable else None,
                 thermostat=self._thermostat_info(state),
+                rooms=self._rooms or None,
             )
         except AuthError as err:
             await self.async_save()
             raise ConfigEntryAuthFailed("The Weheat Monitor key was rejected") from err
+        self._update_room_issues(self._rooms, now)
         await self.async_save()
         return self.snapshot(now)
 
@@ -276,4 +347,12 @@ class WeheatMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "block_count": len(s["blocks"]),
             "decision": s.get("last_decision"),
             "manual_until": until if until and parse_time(until) > now else None,
+            "send_rooms": s.get("send_rooms", True),
+            "rooms": self._room_view(now),
+            "rooms_reporting": sum(
+                1 for r in self._rooms if r.get("temp") is not None and not is_silent(r.get("last_updated"), now)
+            ),
+            "room_queue_length": len(s.get("room_queue") or []),
+            "room_result": s.get("room_result"),
+            "rooms_supported": s.get("rooms_supported"),
         }

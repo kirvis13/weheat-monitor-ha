@@ -13,6 +13,8 @@ SYNC_PATH = "/api/v1/devices/sync"
 CONF_API_KEY = "api_key"
 CONF_BASE_URL = "base_url"
 CONF_CLIMATE = "climate_entity"
+CONF_ROOM_SENSORS = "room_sensors"
+CONF_ROOM_EXTRAS = "room_auto_extras"
 
 # Contract limits of POST /api/v1/devices/sync.
 MAX_MEASUREMENTS_PER_CALL = 100
@@ -47,3 +49,24 @@ SENSOR_FIELDS: dict[str, tuple[str, list[str]]] = {
 # The thermostat's make and model go along with a sync at start-up, after a
 # change, and otherwise once a day.
 THERMOSTAT_REPORT_SECONDS = 24 * 3600
+
+# ─── Room sensors (field `rooms` in the sync) ───────────────────────────────
+# Each chosen temperature sensor is one item in `rooms`; humidity, CO2 and
+# air pressure from the same device (or the only one in the same area) go
+# along. Limits of the contract: 20 sensors per device and per call, 100
+# readings per call over all sensors together.
+MAX_ROOM_SENSORS = 20
+MAX_ROOM_READINGS_PER_CALL = 100
+# The server takes readings up to 29 days old; drop them an hour earlier.
+ROOM_QUEUE_MAX_AGE_SECONDS = 29 * 86400 - 3600
+# A few days of changes for six sensors; the queue is stored with the rest of
+# the state every minute, so it is kept small.
+ROOM_QUEUE_MAX_LENGTH = 5000
+# A room sensor without a new value for this long becomes a repair issue.
+ROOM_SILENT_SECONDS = 2 * 3600
+# Device class in Home Assistant for each optional value of a room sensor.
+ROOM_EXTRA_CLASSES: dict[str, str] = {
+    "humidity": "humidity",
+    "co2": "carbon_dioxide",
+    "pressure": "atmospheric_pressure",
+}

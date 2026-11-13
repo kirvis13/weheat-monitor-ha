@@ -2,7 +2,7 @@
 
 `custom_components/weheat_monitor/__init__.py` imports Home Assistant, so the
 tests register the directory as a bare package `wm` and import the pure
-modules (const, units, logic, api, engine) from there.
+modules (const, units, logic, rooms, api, engine) from there.
 """
 
 import importlib
@@ -17,5 +17,5 @@ if "wm" not in sys.modules:
     pkg.__path__ = [str(PACKAGE_DIR)]
     sys.modules["wm"] = pkg
 
-for name in ("const", "units", "logic", "api", "engine"):
+for name in ("const", "units", "logic", "rooms", "api", "engine"):
     importlib.import_module(f"wm.{name}")

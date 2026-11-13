@@ -50,6 +50,7 @@ class WeheatMonitorClient:
         measurements: list[dict[str, Any]] | None = None,
         applied: list[int] | None = None,
         thermostat: dict[str, Any] | None = None,
+        rooms: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """One sync call. Returns the parsed answer or raises an ApiError."""
         body: dict[str, Any] = {}
@@ -59,6 +60,8 @@ class WeheatMonitorClient:
             body["applied"] = applied
         if thermostat:
             body["thermostat"] = thermostat
+        if rooms:
+            body["rooms"] = rooms
         try:
             async with self._session.post(
                 self._url,
